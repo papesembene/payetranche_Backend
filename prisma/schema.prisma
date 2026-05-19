@@ -1,0 +1,462 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum CreditStatus {
+  ACTIF
+  PAYE
+  EN_RETARD
+  ANNULE
+}
+
+enum PaymentMethod {
+  CASH
+  ORANGE_MONEY
+  WAVE
+  FREE_MONEY
+  BANK_TRANSFER
+  OTHER
+}
+
+enum PaymentStatus {
+  COMPLETED
+  PENDING
+  FAILED
+  CANCELLED
+}
+
+enum ClientStatus {
+  BON
+  RISQUE
+  MAUVAIS
+}
+
+enum SubscriptionPlan {
+  GRATUIT
+  PRO
+  ENTREPRISE
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  STAFF
+}
+
+enum ExternalPaymentProvider {
+  PAYTECH
+}
+
+enum ExternalPaymentStatus {
+  INITIATED
+  PENDING
+  COMPLETED
+  CANCELLED
+  FAILED
+}
+
+enum InstallmentStatus {
+  A_VENIR
+  PAYEE
+  EN_RETARD
+  ANNULEE
+}
+
+enum PayoutOperator {
+  WAVE
+  ORANGE_MONEY
+  FREE_MONEY
+}
+
+enum PayoutStatus {
+  PENDING
+  PROCESSING
+  SENT
+  FAILED
+}
+
+enum WalletTransactionType {
+  COLLECTION
+  COMMISSION
+  PAYOUT
+  ADJUSTMENT
+}
+
+enum AlertType {
+  CREDIT_OVERDUE
+  CLIENT_RISK
+}
+
+enum AlertStatus {
+  PENDING
+  SENT
+  READ
+}
+
+enum AlertChannel {
+  IN_APP
+  SMS
+  WHATSAPP
+}
+
+enum SubscriptionPaymentStatus {
+  INITIATED
+  PENDING
+  COMPLETED
+  CANCELLED
+  FAILED
+}
+
+model Tenant {
+  id                    String    @id @default(cuid())
+  name                  String
+  isActive              Boolean   @default(true)
+  disabledAt            DateTime?
+  onboardingCompletedAt DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  users    User[]
+  clients  Client[]
+  credits  Credit[]
+  payments Payment[]
+  alerts   Alert[]
+  externalPayments ExternalPayment[]
+  installments Installment[]
+  payoutProfiles SellerPayoutProfile[]
+  wallet SellerWallet?
+  walletTransactions WalletTransaction[]
+  payouts SellerPayout[]
+  subscriptionPayments SubscriptionPayment[]
+}
+
+model User {
+  id           String   @id @default(cuid())
+  tenantId     String
+  email        String   @unique
+  name         String
+  phone        String?
+  passwordHash String
+  plan         SubscriptionPlan @default(GRATUIT)
+  planExpiresAt DateTime?
+  role         UserRole @default(OWNER)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  externalPayments ExternalPayment[]
+  subscriptionPayments SubscriptionPayment[]
+
+  @@index([tenantId])
+}
+
+model SubscriptionPayment {
+  id             String                    @id @default(cuid())
+  tenantId       String
+  userId         String
+  plan           SubscriptionPlan
+  status         SubscriptionPaymentStatus @default(INITIATED)
+  amount         Int
+  currency       String                    @default("XOF")
+  refCommand     String                    @unique
+  providerToken  String?
+  redirectUrl    String?
+  targetPayment  String?
+  rawRequest     Json?
+  rawResponse    Json?
+  rawWebhook     Json?
+  paidAt         DateTime?
+  periodStart    DateTime?
+  periodEnd      DateTime?
+  createdAt      DateTime                  @default(now())
+  updatedAt      DateTime                  @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([tenantId, plan])
+  @@index([userId])
+}
+
+model Client {
+  id        String       @id @default(cuid())
+  tenantId  String
+  name      String
+  phone     String?
+  totalDebt Int          @default(0)
+  status    ClientStatus @default(BON)
+  address   String?
+  notes     String?
+  isActive  Boolean      @default(true)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  credits  Credit[]
+  payments Payment[]
+  alerts   Alert[]
+  externalPayments ExternalPayment[]
+  installments Installment[]
+  walletTransactions WalletTransaction[]
+  payouts SellerPayout[]
+
+  @@index([tenantId])
+  @@index([tenantId, phone])
+  @@index([tenantId, status])
+}
+
+model Credit {
+  id              String       @id @default(cuid())
+  tenantId        String
+  clientId        String
+  amount          Int
+  paidAmount      Int          @default(0)
+  remainingAmount Int
+  description     String?
+  dueDate         DateTime?
+  status          CreditStatus @default(ACTIF)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  client   Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  payments Payment[]
+  alerts   Alert[]
+  externalPayments ExternalPayment[]
+  installments Installment[]
+
+  @@index([tenantId])
+  @@index([tenantId, clientId])
+  @@index([tenantId, status])
+}
+
+model Payment {
+  id        String        @id @default(cuid())
+  tenantId  String
+  clientId  String
+  creditId  String?
+  installmentId String?
+  amount    Int
+  method    PaymentMethod @default(CASH)
+  status    PaymentStatus @default(COMPLETED)
+  reference String?
+  paidAt    DateTime      @default(now())
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  tenant Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  client Client  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  credit Credit? @relation(fields: [creditId], references: [id], onDelete: SetNull)
+  installment Installment? @relation(fields: [installmentId], references: [id], onDelete: SetNull)
+  externalPayment ExternalPayment?
+  walletTransactions WalletTransaction[]
+  payouts SellerPayout[]
+
+  @@index([tenantId])
+  @@index([tenantId, clientId])
+  @@index([tenantId, creditId])
+  @@index([tenantId, installmentId])
+}
+
+model Installment {
+  id              String            @id @default(cuid())
+  tenantId        String
+  creditId        String
+  clientId        String
+  number          Int
+  amount          Int
+  paidAmount      Int               @default(0)
+  remainingAmount Int
+  dueDate         DateTime
+  status          InstallmentStatus @default(A_VENIR)
+  reminderCount   Int               @default(0)
+  lastReminderAt  DateTime?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  client   Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  credit   Credit    @relation(fields: [creditId], references: [id], onDelete: Cascade)
+  payments Payment[]
+  externalPayments ExternalPayment[]
+
+  @@unique([creditId, number])
+  @@index([tenantId])
+  @@index([tenantId, clientId])
+  @@index([tenantId, creditId])
+  @@index([tenantId, status])
+  @@index([tenantId, dueDate])
+}
+
+model ExternalPayment {
+  id             String                  @id @default(cuid())
+  tenantId       String
+  clientId       String
+  creditId       String?
+  installmentId  String?
+  paymentId      String?                 @unique
+  requestedById  String?
+  provider       ExternalPaymentProvider @default(PAYTECH)
+  status         ExternalPaymentStatus   @default(INITIATED)
+  amount         Int
+  currency       String                  @default("XOF")
+  refCommand     String                  @unique
+  providerToken  String?
+  redirectUrl    String?
+  targetPayment  String?
+  clientPhone    String?
+  providerMethod String?
+  rawRequest     Json?
+  rawResponse    Json?
+  rawWebhook     Json?
+  paidAt         DateTime?
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  credit      Credit?  @relation(fields: [creditId], references: [id], onDelete: SetNull)
+  installment Installment? @relation(fields: [installmentId], references: [id], onDelete: SetNull)
+  payment     Payment? @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  requestedBy User?    @relation(fields: [requestedById], references: [id], onDelete: SetNull)
+  walletTransactions WalletTransaction[]
+  payouts SellerPayout[]
+
+  @@index([tenantId])
+  @@index([tenantId, clientId])
+  @@index([tenantId, creditId])
+  @@index([tenantId, installmentId])
+  @@index([tenantId, status])
+  @@index([providerToken])
+}
+
+model SellerPayoutProfile {
+  id         String         @id @default(cuid())
+  tenantId   String
+  operator   PayoutOperator
+  phone      String
+  holderName String
+  isDefault  Boolean        @default(false)
+  isVerified Boolean        @default(false)
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, operator])
+  @@index([tenantId])
+  @@index([tenantId, isDefault])
+}
+
+model SellerWallet {
+  id              String   @id @default(cuid())
+  tenantId        String   @unique
+  availableAmount Int      @default(0)
+  pendingAmount   Int      @default(0)
+  paidOutAmount   Int      @default(0)
+  totalCollected  Int      @default(0)
+  totalFees       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+model WalletTransaction {
+  id                String                @id @default(cuid())
+  tenantId          String
+  clientId          String?
+  paymentId         String?
+  externalPaymentId String?
+  payoutId          String?
+  type              WalletTransactionType
+  amount            Int
+  feeAmount         Int                   @default(0)
+  netAmount         Int
+  description       String?
+  createdAt         DateTime              @default(now())
+
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  client          Client?          @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  payment         Payment?         @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  externalPayment ExternalPayment? @relation(fields: [externalPaymentId], references: [id], onDelete: SetNull)
+  payout          SellerPayout?    @relation(fields: [payoutId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([tenantId, type])
+  @@index([tenantId, clientId])
+  @@index([tenantId, paymentId])
+  @@index([tenantId, externalPaymentId])
+  @@index([tenantId, payoutId])
+}
+
+model SellerPayout {
+  id                String         @id @default(cuid())
+  tenantId          String
+  clientId          String?
+  paymentId         String?
+  externalPaymentId String?
+  providerTransferId String?       @unique
+  providerTransferToken String?
+  providerTransferState String?
+  amount            Int
+  feeAmount         Int            @default(0)
+  netAmount         Int
+  operator          PayoutOperator
+  phone             String
+  holderName        String
+  status            PayoutStatus   @default(PENDING)
+  failureReason     String?
+  attemptedAt       DateTime?
+  processedAt       DateTime?
+  rawTransferRequest Json?
+  rawTransferResponse Json?
+  rawTransferCallback Json?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  tenant          Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  client          Client?             @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  payment         Payment?            @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  externalPayment ExternalPayment?    @relation(fields: [externalPaymentId], references: [id], onDelete: SetNull)
+  transactions    WalletTransaction[]
+
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([tenantId, clientId])
+  @@index([tenantId, paymentId])
+  @@index([tenantId, externalPaymentId])
+  @@index([providerTransferId])
+}
+
+model Alert {
+  id        String       @id @default(cuid())
+  tenantId  String
+  clientId  String?
+  creditId  String?
+  type      AlertType
+  status    AlertStatus  @default(PENDING)
+  channel   AlertChannel @default(IN_APP)
+  title     String
+  message   String
+  metadata  Json?
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  tenant Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  client Client? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  credit Credit? @relation(fields: [creditId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([tenantId, type])
+  @@index([tenantId, clientId])
+  @@index([tenantId, creditId])
+}

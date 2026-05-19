@@ -1,0 +1,53 @@
+services:
+  - type: web
+    name: paytranche-api
+    runtime: node
+    region: frankfurt
+    plan: starter
+    buildCommand: npm ci && npm run build
+    preDeployCommand: npm run prisma:migrate:deploy
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeployTrigger: commit
+    envVars:
+      - key: NODE_VERSION
+        value: 22.16.0
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: paytranche-postgres
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: FRONTEND_URL
+        sync: false
+      - key: CORS_ORIGIN
+        sync: false
+      - key: PUBLIC_API_URL
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: FIREBASE_PROJECT_ID
+        sync: false
+      - key: PAYTECH_ENV
+        value: test
+      - key: PAYTECH_API_KEY
+        sync: false
+      - key: PAYTECH_API_SECRET
+        sync: false
+      - key: PAYTECH_AUTO_PAYOUTS_ENABLED
+        value: "false"
+      - key: PAYTRANCHE_COMMISSION_RATE
+        value: "0"
+      - key: PLATFORM_ADMIN_EMAILS
+        sync: false
+      - key: ALLOW_DEV_ADMIN
+        value: "false"
+
+databases:
+  - name: paytranche-postgres
+    databaseName: paytranche
+    user: paytranche
