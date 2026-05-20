@@ -373,6 +373,113 @@ export class PayoutService {
     });
   }
 
+  async updatePayoutDestination(
+    tenantId: string,
+    payoutId: string,
+    input: {
+      operator: PayoutOperator;
+      phone: string;
+      holderName: string;
+    },
+  ) {
+    const payout = await prisma.sellerPayout.findFirst({
+      where: { id: payoutId, tenantId },
+    });
+
+    if (!payout) {
+      throw new AppError("Payout not found", 404);
+    }
+
+    if (payout.status === PayoutStatus.SENT) {
+      throw new AppError("A sent payout cannot be modified", 409);
+    }
+
+    if (payout.status === PayoutStatus.PROCESSING) {
+      throw new AppError("Sync the processing payout before editing it", 409);
+    }
+
+    return prisma.sellerPayout.update({
+      where: { id: payout.id },
+      data: {
+        operator: input.operator,
+        phone: input.phone,
+        holderName: input.holderName,
+        status: PayoutStatus.PENDING,
+        failureReason: null,
+        providerTransferId: null,
+        providerTransferToken: null,
+        providerTransferState: null,
+      },
+    });
+  }
+
+  async markPayoutPaidManually(
+    tenantId: string,
+    payoutId: string,
+    input: {
+      reference: string;
+      note?: string;
+    },
+    adminEmail?: string,
+  ) {
+    const payout = await prisma.sellerPayout.findFirst({
+      where: { id: payoutId, tenantId },
+    });
+
+    if (!payout) {
+      throw new AppError("Payout not found", 404);
+    }
+
+    if (payout.status === PayoutStatus.SENT) {
+      return payout;
+    }
+
+    if (payout.status === PayoutStatus.PROCESSING) {
+      throw new AppError("Sync the processing payout before marking it paid", 409);
+    }
+
+    return prisma.$transaction(async (tx) => {
+      const now = new Date();
+      const updated = await tx.sellerPayout.update({
+        where: { id: payout.id },
+        data: {
+          status: PayoutStatus.SENT,
+          processedAt: now,
+          failureReason: null,
+          manualReference: input.reference,
+          manualNote: input.note || null,
+          manuallyMarkedAt: now,
+          manuallyMarkedBy: adminEmail || null,
+        },
+      });
+
+      await tx.sellerWallet.update({
+        where: { tenantId },
+        data: {
+          pendingAmount: { decrement: payout.netAmount },
+          paidOutAmount: { increment: payout.netAmount },
+        },
+      });
+
+      await tx.walletTransaction.create({
+        data: {
+          tenantId,
+          clientId: payout.clientId,
+          paymentId: payout.paymentId,
+          externalPaymentId: payout.externalPaymentId,
+          payoutId: payout.id,
+          type: WalletTransactionType.PAYOUT,
+          amount: payout.amount,
+          feeAmount: payout.feeAmount,
+          netAmount: payout.netAmount,
+          description: `Reversement marque paye manuellement (${input.reference})`,
+        },
+      });
+
+      return updated;
+    });
+  }
+
   async initiatePayoutTransfer(tenantId: string, payoutId: string) {
     if (!isAutomaticPayoutEnabled()) {
       throw new AppError("Automatic PayTech payouts are not enabled", 403);
@@ -407,7 +514,15 @@ export class PayoutService {
 
     const trackedPayout = asPayoutTransferRecord(payout);
 
-    if (trackedPayout.providerTransferId) {
+    if (payout.status === PayoutStatus.PROCESSING) {
+      if (trackedPayout.providerTransferId) {
+        return this.syncPayoutTransferStatus(tenantId, payout.id);
+      }
+
+      throw new AppError("Payout transfer is already processing", 409);
+    }
+
+    if (trackedPayout.providerTransferId && payout.status !== PayoutStatus.FAILED) {
       return this.syncPayoutTransferStatus(tenantId, payout.id);
     }
 

@@ -6,6 +6,8 @@ import {
   adminTenantIdSchema,
   listAdminPayoutsSchema,
   listAdminTenantsSchema,
+  markAdminPayoutManualSchema,
+  updateAdminPayoutDestinationSchema,
   updateAdminPlanSchema,
   updateTenantStatusSchema,
 } from "../schemas/admin.schema";
@@ -51,6 +53,16 @@ router.post(
   "/payouts/:payoutId/send",
   validateRequest(adminPayoutIdSchema),
   asyncHandler(controller.sendPayout)
+);
+router.patch(
+  "/payouts/:payoutId/destination",
+  validateRequest(updateAdminPayoutDestinationSchema),
+  asyncHandler(controller.updatePayoutDestination)
+);
+router.post(
+  "/payouts/:payoutId/manual-paid",
+  validateRequest(markAdminPayoutManualSchema),
+  asyncHandler(controller.markPayoutManual)
 );
 
 export { router as adminRoutes };

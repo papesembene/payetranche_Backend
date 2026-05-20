@@ -59,4 +59,21 @@ export class AdminController {
     const data = await adminService.sendPayout(req.params.payoutId);
     return res.json({ success: true, data });
   }
+
+  async updatePayoutDestination(req: Request, res: Response) {
+    const data = await adminService.updatePayoutDestination(
+      req.params.payoutId,
+      req.body
+    );
+    return res.json({ success: true, data });
+  }
+
+  async markPayoutManual(req: Request, res: Response) {
+    const data = await adminService.markPayoutPaidManually(
+      req.params.payoutId,
+      req.body,
+      req.user?.email
+    );
+    return res.json({ success: true, data });
+  }
 }

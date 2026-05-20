@@ -26,6 +26,8 @@ export const adminPayoutIdSchema = z.object({
   }),
 });
 
+const payoutOperatorSchema = z.enum(["WAVE", "ORANGE_MONEY"]);
+
 export const updateTenantStatusSchema = z.object({
   params: z.object({
     tenantId: z.string().min(1),
@@ -45,7 +47,34 @@ export const updateAdminPlanSchema = z.object({
   }),
 });
 
+export const updateAdminPayoutDestinationSchema = z.object({
+  params: z.object({
+    payoutId: z.string().min(1),
+  }),
+  body: z.object({
+    operator: payoutOperatorSchema,
+    phone: z.string().trim().min(8).max(20),
+    holderName: z.string().trim().min(2).max(120),
+  }),
+});
+
+export const markAdminPayoutManualSchema = z.object({
+  params: z.object({
+    payoutId: z.string().min(1),
+  }),
+  body: z.object({
+    reference: z.string().trim().min(2).max(120),
+    note: z.string().trim().max(500).optional(),
+  }),
+});
+
 export type UpdateAdminPlanInput = z.infer<typeof updateAdminPlanSchema>["body"];
 export type ListAdminPayoutsInput = z.infer<
   typeof listAdminPayoutsSchema
 >["query"];
+export type UpdateAdminPayoutDestinationInput = z.infer<
+  typeof updateAdminPayoutDestinationSchema
+>["body"];
+export type MarkAdminPayoutManualInput = z.infer<
+  typeof markAdminPayoutManualSchema
+>["body"];

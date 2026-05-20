@@ -416,6 +416,10 @@ model SellerPayout {
   holderName        String
   status            PayoutStatus   @default(PENDING)
   failureReason     String?
+  manualReference   String?
+  manualNote        String?
+  manuallyMarkedAt  DateTime?
+  manuallyMarkedBy  String?
   attemptedAt       DateTime?
   processedAt       DateTime?
   rawTransferRequest Json?

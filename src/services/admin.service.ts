@@ -1,6 +1,8 @@
 import { PayoutStatus, Prisma, SubscriptionPlan } from "@prisma/client";
 import {
   ListAdminPayoutsInput,
+  MarkAdminPayoutManualInput,
+  UpdateAdminPayoutDestinationInput,
   UpdateAdminPlanInput,
 } from "../schemas/admin.schema";
 import { AppError } from "../utils/AppError";
@@ -422,6 +424,48 @@ export class AdminService {
     return this.payoutService.initiatePayoutTransfer(
       payout.tenantId,
       payout.id
+    );
+  }
+
+  async updatePayoutDestination(
+    payoutId: string,
+    input: UpdateAdminPayoutDestinationInput
+  ) {
+    const payout = await prisma.sellerPayout.findUnique({
+      where: { id: payoutId },
+      select: { id: true, tenantId: true },
+    });
+
+    if (!payout) {
+      throw new AppError("Payout not found", 404);
+    }
+
+    return this.payoutService.updatePayoutDestination(
+      payout.tenantId,
+      payout.id,
+      input
+    );
+  }
+
+  async markPayoutPaidManually(
+    payoutId: string,
+    input: MarkAdminPayoutManualInput,
+    adminEmail?: string
+  ) {
+    const payout = await prisma.sellerPayout.findUnique({
+      where: { id: payoutId },
+      select: { id: true, tenantId: true },
+    });
+
+    if (!payout) {
+      throw new AppError("Payout not found", 404);
+    }
+
+    return this.payoutService.markPayoutPaidManually(
+      payout.tenantId,
+      payout.id,
+      input,
+      adminEmail
     );
   }
 }
