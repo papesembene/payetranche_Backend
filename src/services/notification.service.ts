@@ -4,6 +4,7 @@ import {
   AlertType,
   ClientStatus,
   CreditStatus,
+  InstallmentStatus,
   Prisma,
 } from "@prisma/client";
 import { prisma } from "../utils/prisma";
@@ -12,6 +13,53 @@ import { getNotificationChannel } from "./notificationChannel.service";
 
 const OVERDUE_GRACE_DAYS = 3;
 const RISK_OVERDUE_THRESHOLD = 2;
+
+const startOfDay = (date: Date) => {
+  const nextDate = new Date(date);
+  nextDate.setHours(0, 0, 0, 0);
+  return nextDate;
+};
+
+const endOfDay = (date: Date) => {
+  const nextDate = new Date(date);
+  nextDate.setHours(23, 59, 59, 999);
+  return nextDate;
+};
+
+const formatAmount = (amount: number) =>
+  `${new Intl.NumberFormat("fr-FR").format(amount)} FCFA`;
+
+const formatDate = (date: Date) =>
+  new Intl.DateTimeFormat("fr-FR", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  }).format(date);
+
+const daysLate = (dueDate: Date, today = new Date()) => {
+  const diff = startOfDay(today).getTime() - startOfDay(dueDate).getTime();
+  return Math.max(0, Math.floor(diff / 86_400_000));
+};
+
+const isToday = (date?: Date | null, today = new Date()) => {
+  if (!date) return false;
+  return startOfDay(date).getTime() === startOfDay(today).getTime();
+};
+
+const buildReminderMessage = (input: {
+  clientName: string;
+  label: string;
+  amount: number;
+  dueDate: Date;
+  overdueDays: number;
+}) => {
+  const delay =
+    input.overdueDays > 0
+      ? `en retard depuis ${input.overdueDays} jour${input.overdueDays > 1 ? "s" : ""}`
+      : "prévu aujourd’hui";
+
+  return `Bonjour ${input.clientName}, rappel PayTranche: votre ${input.label} de ${formatAmount(input.amount)} est ${delay} (échéance ${formatDate(input.dueDate)}). Merci de régulariser dès que possible.`;
+};
 
 export class NotificationService {
   async listAlerts(
@@ -149,6 +197,169 @@ export class NotificationService {
       riskClientsDetected: riskyClients.length,
       riskAlertsCreated,
     };
+  }
+
+  async listWhatsAppReminders(tenantId: string) {
+    const today = new Date();
+    const dueUntil = endOfDay(today);
+
+    await this.markDueItemsAsOverdue(tenantId, today);
+
+    const [installments, credits] = await Promise.all([
+      prisma.installment.findMany({
+        where: {
+          tenantId,
+          remainingAmount: { gt: 0 },
+          status: { notIn: [InstallmentStatus.PAYEE, InstallmentStatus.ANNULEE] },
+          dueDate: { lte: dueUntil },
+        },
+        include: { client: true, credit: true },
+        orderBy: [{ dueDate: "asc" }, { number: "asc" }],
+      }),
+      prisma.credit.findMany({
+        where: {
+          tenantId,
+          remainingAmount: { gt: 0 },
+          status: { notIn: [CreditStatus.PAYE, CreditStatus.ANNULE] },
+          dueDate: { lte: dueUntil },
+          installments: { none: {} },
+        },
+        include: { client: true },
+        orderBy: [{ dueDate: "asc" }, { createdAt: "asc" }],
+      }),
+    ]);
+
+    const installmentReminders = installments.map((installment) => {
+      const overdueDays = daysLate(installment.dueDate, today);
+      const amount = installment.remainingAmount;
+      const label = `tranche ${installment.number}`;
+
+      return {
+        id: `installment-${installment.id}`,
+        type: "installment" as const,
+        sourceId: installment.id,
+        creditId: installment.creditId,
+        clientId: installment.clientId,
+        clientName: installment.client.name,
+        clientPhone: installment.client.phone,
+        title: `Tranche ${installment.number}`,
+        description: installment.credit.description,
+        amount,
+        dueDate: installment.dueDate,
+        overdueDays,
+        reminderCount: installment.reminderCount,
+        lastReminderAt: installment.lastReminderAt,
+        remindedToday: isToday(installment.lastReminderAt, today),
+        whatsappMessage: buildReminderMessage({
+          clientName: installment.client.name,
+          label,
+          amount,
+          dueDate: installment.dueDate,
+          overdueDays,
+        }),
+      };
+    });
+
+    const creditReminders = credits.map((credit) => {
+      const dueDate = credit.dueDate as Date;
+      const overdueDays = daysLate(dueDate, today);
+      const amount = credit.remainingAmount;
+
+      return {
+        id: `credit-${credit.id}`,
+        type: "credit" as const,
+        sourceId: credit.id,
+        creditId: credit.id,
+        clientId: credit.clientId,
+        clientName: credit.client.name,
+        clientPhone: credit.client.phone,
+        title: "Dette client",
+        description: credit.description,
+        amount,
+        dueDate,
+        overdueDays,
+        reminderCount: credit.reminderCount,
+        lastReminderAt: credit.lastReminderAt,
+        remindedToday: isToday(credit.lastReminderAt, today),
+        whatsappMessage: buildReminderMessage({
+          clientName: credit.client.name,
+          label: "paiement",
+          amount,
+          dueDate,
+          overdueDays,
+        }),
+      };
+    });
+
+    return [...installmentReminders, ...creditReminders].sort(
+      (a, b) =>
+        new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime() ||
+        a.clientName.localeCompare(b.clientName)
+    );
+  }
+
+  async markWhatsAppReminderPrepared(
+    tenantId: string,
+    type: "credit" | "installment",
+    id: string
+  ) {
+    if (type === "installment") {
+      const installment = await prisma.installment.findFirst({
+        where: { id, tenantId },
+      });
+
+      if (!installment) {
+        throw new AppError("Installment not found", 404);
+      }
+
+      return prisma.installment.update({
+        where: { id: installment.id },
+        data: {
+          reminderCount: { increment: 1 },
+          lastReminderAt: new Date(),
+        },
+      });
+    }
+
+    const credit = await prisma.credit.findFirst({
+      where: { id, tenantId },
+    });
+
+    if (!credit) {
+      throw new AppError("Credit not found", 404);
+    }
+
+    return prisma.credit.update({
+      where: { id: credit.id },
+      data: {
+        reminderCount: { increment: 1 },
+        lastReminderAt: new Date(),
+      },
+    });
+  }
+
+  private async markDueItemsAsOverdue(tenantId: string, today: Date) {
+    await Promise.all([
+      prisma.installment.updateMany({
+        where: {
+          tenantId,
+          dueDate: { lt: startOfDay(today) },
+          remainingAmount: { gt: 0 },
+          status: InstallmentStatus.A_VENIR,
+        },
+        data: { status: InstallmentStatus.EN_RETARD },
+      }),
+      prisma.credit.updateMany({
+        where: {
+          tenantId,
+          dueDate: { lt: startOfDay(today) },
+          remainingAmount: { gt: 0 },
+          status: CreditStatus.ACTIF,
+          installments: { none: {} },
+        },
+        data: { status: CreditStatus.EN_RETARD },
+      }),
+    ]);
   }
 
   private async createAlertIfMissing(input: {

@@ -29,4 +29,22 @@ export class NotificationController {
 
     return res.json({ success: true, data: result });
   }
+
+  async todayReminders(req: Request, res: Response) {
+    const reminders = await notificationService.listWhatsAppReminders(
+      req.tenantId as string
+    );
+
+    return res.json({ success: true, data: reminders });
+  }
+
+  async markWhatsAppReminder(req: Request, res: Response) {
+    const reminder = await notificationService.markWhatsAppReminderPrepared(
+      req.tenantId as string,
+      req.params.type as "credit" | "installment",
+      req.params.id
+    );
+
+    return res.json({ success: true, data: reminder });
+  }
 }

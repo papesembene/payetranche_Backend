@@ -222,6 +222,8 @@ model Credit {
   description     String?
   dueDate         DateTime?
   status          CreditStatus @default(ACTIF)
+  reminderCount   Int          @default(0)
+  lastReminderAt  DateTime?
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 

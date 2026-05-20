@@ -1,0 +1,3 @@
+ALTER TABLE "public"."Credit"
+ADD COLUMN "reminderCount" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN "lastReminderAt" TIMESTAMP(3);

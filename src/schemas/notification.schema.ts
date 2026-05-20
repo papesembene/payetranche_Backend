@@ -14,3 +14,10 @@ export const alertIdSchema = z.object({
     id: z.string().min(1),
   }),
 });
+
+export const reminderSourceSchema = z.object({
+  params: z.object({
+    type: z.enum(["credit", "installment"]),
+    id: z.string().min(1),
+  }),
+});

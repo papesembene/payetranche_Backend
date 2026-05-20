@@ -28,7 +28,7 @@ const getPublicUrl = () => (process.env.PUBLIC_API_URL || process.env.APP_URL ||
 
 const PLAN_PRICES: Record<SubscriptionPlan, number> = {
   [SubscriptionPlan.GRATUIT]: 0,
-  [SubscriptionPlan.PRO]: 15000,
+  [SubscriptionPlan.PRO]: 3000,
   [SubscriptionPlan.ENTREPRISE]: 50000,
 };
 
