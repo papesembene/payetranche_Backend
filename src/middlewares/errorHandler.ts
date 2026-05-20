@@ -4,7 +4,7 @@ import { AppError } from "../utils/AppError";
 
 export function errorHandler(
   err: unknown,
-  _req: Request,
+  req: Request,
   res: Response,
   _next: NextFunction
 ) {
@@ -23,7 +23,7 @@ export function errorHandler(
     });
   }
 
-  console.error(err);
+  console.error(`[${req.method}] ${req.originalUrl}`, err);
 
   return res.status(500).json({
     success: false,

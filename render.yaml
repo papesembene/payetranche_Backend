@@ -6,7 +6,7 @@ services:
     plan: starter
     buildCommand: npm ci && npm run build
     preDeployCommand: npm run prisma:migrate:deploy
-    startCommand: npm start
+    startCommand: npm run start:render
     healthCheckPath: /api/health
     autoDeployTrigger: commit
     envVars:
