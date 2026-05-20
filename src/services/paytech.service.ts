@@ -13,12 +13,13 @@ import { PayoutService } from "./payout.service";
 
 type PaytechRequestInput = {
   tenantId: string;
-  userId: string;
+  userId?: string;
   creditId: string;
   installmentId?: string;
   amount?: number;
   targetPayment: string;
   clientPhone?: string;
+  portalToken?: string;
 };
 
 type PaytechWebhookPayload = {
@@ -146,6 +147,19 @@ export class PaytechService {
       throw new AppError("PUBLIC_API_URL must be configured for PayTech redirects", 503);
     }
 
+    const successUrl = new URL(`${publicUrl}/api/paytech/redirect/success`);
+    successUrl.searchParams.set("provider", "paytech");
+    successUrl.searchParams.set("ref", refCommand);
+
+    const cancelUrl = new URL(`${publicUrl}/api/paytech/redirect/cancel`);
+    cancelUrl.searchParams.set("provider", "paytech");
+    cancelUrl.searchParams.set("ref", refCommand);
+
+    if (input.portalToken) {
+      successUrl.searchParams.set("portal", input.portalToken);
+      cancelUrl.searchParams.set("portal", input.portalToken);
+    }
+
     const requestBody = {
       item_name: installment
         ? `Paiement tranche ${installment.number} - ${credit.client.name}`
@@ -157,14 +171,15 @@ export class PaytechService {
       env: process.env.PAYTECH_ENV || "test",
       target_payment: input.targetPayment,
       ipn_url: `${publicUrl}/api/paytech/ipn`,
-      success_url: `${publicUrl}/api/paytech/redirect/success?provider=paytech&ref=${encodeURIComponent(refCommand)}`,
-      cancel_url: `${publicUrl}/api/paytech/redirect/cancel?provider=paytech&ref=${encodeURIComponent(refCommand)}`,
+      success_url: successUrl.toString(),
+      cancel_url: cancelUrl.toString(),
       custom_field: JSON.stringify({
         tenantId: input.tenantId,
         clientId: credit.clientId,
         creditId: credit.id,
         installmentId: installment?.id,
         requestedById: input.userId,
+        portalToken: input.portalToken,
       }),
     };
 

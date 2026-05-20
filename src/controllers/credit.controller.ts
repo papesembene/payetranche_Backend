@@ -46,6 +46,14 @@ export class CreditController {
     return res.json({ success: true, data: events });
   }
 
+  async clientPortalLink(req: Request, res: Response) {
+    const link = await creditService.getClientPortalLink(
+      req.tenantId as string,
+      req.params.id
+    );
+    return res.json({ success: true, data: link });
+  }
+
   async update(req: Request, res: Response) {
     const credit = await creditService.update(
       req.tenantId as string,

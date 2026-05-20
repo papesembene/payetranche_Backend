@@ -224,6 +224,7 @@ model Credit {
   status          CreditStatus @default(ACTIF)
   reminderCount   Int          @default(0)
   lastReminderAt  DateTime?
+  clientPortalToken String?     @unique
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
@@ -237,6 +238,7 @@ model Credit {
   @@index([tenantId])
   @@index([tenantId, clientId])
   @@index([tenantId, status])
+  @@index([clientPortalToken])
 }
 
 model Payment {

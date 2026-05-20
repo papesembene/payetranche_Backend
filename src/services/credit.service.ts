@@ -1,9 +1,16 @@
+import crypto from "crypto";
 import { CreditStatus, Prisma } from "@prisma/client";
 import { clientModel } from "../models/client.model";
 import { creditModel } from "../models/credit.model";
 import { CreateCreditInput, UpdateCreditInput } from "../schemas/credit.schema";
 import { AppError } from "../utils/AppError";
 import { prisma } from "../utils/prisma";
+
+const getFrontendUrl = () =>
+  (process.env.FRONTEND_URL || "http://localhost:5173").replace(/\/$/, "");
+
+const generateClientPortalToken = () =>
+  crypto.randomBytes(24).toString("base64url");
 
 export class CreditService {
   async create(tenantId: string, input: CreateCreditInput) {
@@ -27,6 +34,7 @@ export class CreditService {
           tenantId,
           remainingAmount,
           status,
+          clientPortalToken: generateClientPortalToken(),
         },
         include: { client: true },
       });
@@ -162,6 +170,31 @@ export class CreditService {
       (a, b) =>
         new Date(a.occurredAt).getTime() - new Date(b.occurredAt).getTime()
     );
+  }
+
+  async getClientPortalLink(tenantId: string, id: string) {
+    const credit = await prisma.credit.findFirst({
+      where: { id, tenantId },
+      select: { id: true, clientPortalToken: true },
+    });
+
+    if (!credit) {
+      throw new AppError("Credit not found", 404);
+    }
+
+    const token = credit.clientPortalToken || generateClientPortalToken();
+    const updated = credit.clientPortalToken
+      ? credit
+      : await prisma.credit.update({
+          where: { id: credit.id },
+          data: { clientPortalToken: token },
+          select: { id: true, clientPortalToken: true },
+        });
+
+    return {
+      token: updated.clientPortalToken,
+      url: `${getFrontendUrl()}/suivi/${updated.clientPortalToken}`,
+    };
   }
 
   async getById(tenantId: string, id: string) {

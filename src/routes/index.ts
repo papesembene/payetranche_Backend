@@ -5,6 +5,7 @@ import { tenantMiddleware } from "../middlewares/tenantMiddleware";
 import { analyticsRoutes } from "./analytics.routes";
 import { adminRoutes } from "./admin.routes";
 import { authRoutes } from "./auth.routes";
+import { clientPortalRoutes } from "./clientPortal.routes";
 import { clientRoutes } from "./client.routes";
 import { creditRoutes } from "./credit.routes";
 import { notificationRoutes } from "./notification.routes";
@@ -31,6 +32,7 @@ const protectedTenantRoute = [tenantMiddleware, authMiddleware];
 
 router.use("/auth", authRoutes);
 router.use("/subscription", subscriptionPublicRoutes);
+router.use("/client-portal", clientPortalRoutes);
 router.use("/admin", authMiddleware, platformAdminMiddleware, adminRoutes);
 router.use("/tenants", ...protectedTenantRoute, tenantRoutes);
 router.use("/clients", ...protectedTenantRoute, clientRoutes);

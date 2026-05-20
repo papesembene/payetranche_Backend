@@ -30,6 +30,11 @@ router.get(
   validateRequest(creditIdSchema),
   asyncHandler(controller.timeline)
 );
+router.get(
+  "/:id/client-portal",
+  validateRequest(creditIdSchema),
+  asyncHandler(controller.clientPortalLink)
+);
 router.patch(
   "/:id",
   validateRequest(updateCreditSchema),
