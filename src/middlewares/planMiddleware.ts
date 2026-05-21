@@ -49,7 +49,8 @@ export async function enforceClientLimit(
     if (clientsCount >= maxClients) {
       return res.status(403).json({
         success: false,
-        message: `Client limit reached for ${plan} plan`,
+        message:
+          "Limite du plan gratuit atteinte. Passez au plan Pro pour ajouter un nouveau client.",
         plan,
         limit: maxClients,
         currentUsage: clientsCount,
