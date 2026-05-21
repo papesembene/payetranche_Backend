@@ -3,6 +3,20 @@ import { verifyJwt } from "../utils/jwt";
 import { userModel } from "../models/user.model";
 import { prisma } from "../utils/prisma";
 
+const getPlatformAdminEmails = () =>
+  (process.env.PLATFORM_ADMIN_EMAILS || "")
+    .split(",")
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean);
+
+const isPlatformAdminEmail = (email?: string | null) => {
+  if (!email) return false;
+  return (
+    process.env.ALLOW_DEV_ADMIN === "true" ||
+    getPlatformAdminEmails().includes(email.toLowerCase())
+  );
+};
+
 export async function authMiddleware(
   req: Request,
   res: Response,
@@ -44,7 +58,7 @@ export async function authMiddleware(
       select: { isActive: true },
     });
 
-    if (!tenant?.isActive) {
+    if (!tenant?.isActive && !isPlatformAdminEmail(user.email)) {
       return res.status(403).json({
         success: false,
         message: "This seller account is disabled",
