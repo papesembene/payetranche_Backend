@@ -106,15 +106,22 @@ export const verifyFirebaseIdToken = async (idToken: string) => {
     throw new AppError("Invalid Firebase token issuer", 401);
   }
 
-  if (!payload.sub || !payload.email) {
-    throw new AppError("Firebase token missing user email", 401);
+  if (!payload.sub) {
+    throw new AppError("Firebase token missing user identity", 401);
   }
 
+  const provider = payload.firebase?.sign_in_provider || "firebase";
+  const uid = payload.user_id || payload.sub;
+  const email =
+    payload.email?.toLowerCase() ||
+    `${provider.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-${uid}@auth.paytranche.local`;
+  const name = payload.name || payload.email?.split("@")[0] || "Utilisateur PayTranche";
+
   return {
-    uid: payload.user_id || payload.sub,
-    email: payload.email.toLowerCase(),
+    uid,
+    email,
     emailVerified: Boolean(payload.email_verified),
-    name: payload.name || payload.email.split("@")[0],
-    provider: payload.firebase?.sign_in_provider || "firebase",
+    name,
+    provider,
   };
 };

@@ -32,6 +32,18 @@ services:
         sync: false
       - key: FIREBASE_PROJECT_ID
         sync: false
+      - key: BREVO_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: EMAIL_FROM_NAME
+        value: PayTranche
+      - key: TIKTOK_CLIENT_KEY
+        sync: false
+      - key: TIKTOK_CLIENT_SECRET
+        sync: false
+      - key: TIKTOK_REDIRECT_URI
+        sync: false
       - key: PAYTECH_ENV
         value: test
       - key: PAYTECH_API_KEY

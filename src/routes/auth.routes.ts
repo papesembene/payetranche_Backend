@@ -27,6 +27,10 @@ router.post(
   asyncHandler(controller.socialLogin)
 );
 
+router.get("/tiktok/start", asyncHandler(controller.startTikTokLogin));
+
+router.get("/tiktok/callback", asyncHandler(controller.completeTikTokLogin));
+
 router.get(
   "/me",
   tenantMiddleware,
