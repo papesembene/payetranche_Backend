@@ -1,9 +1,22 @@
-import { CreditStatus, InstallmentStatus, PaymentStatus } from "@prisma/client";
+import {
+  CreditStatus,
+  InstallmentStatus,
+  PaymentStatus,
+  PayoutOperator,
+} from "@prisma/client";
 import { AppError } from "../utils/AppError";
 import { prisma } from "../utils/prisma";
 import { PaytechService } from "./paytech.service";
 
 const MIN_PAYTECH_AMOUNT = 101;
+const isClientOnlinePaymentEnabled = () =>
+  process.env.PAYTECH_CLIENT_PAYMENTS_ENABLED === "true";
+
+const mobileMoneyLabel = (operator: PayoutOperator) => {
+  if (operator === PayoutOperator.WAVE) return "Wave";
+  if (operator === PayoutOperator.ORANGE_MONEY) return "Orange Money";
+  return operator;
+};
 
 export class ClientPortalService {
   private paytechService = new PaytechService();
@@ -12,7 +25,21 @@ export class ClientPortalService {
     const credit = await prisma.credit.findUnique({
       where: { clientPortalToken: token },
       include: {
-        tenant: { select: { name: true } },
+        tenant: {
+          select: {
+            name: true,
+            payoutProfiles: {
+              where: { operator: { in: [PayoutOperator.WAVE, PayoutOperator.ORANGE_MONEY] } },
+              orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
+              select: {
+                operator: true,
+                phone: true,
+                holderName: true,
+                isDefault: true,
+              },
+            },
+          },
+        },
         client: { select: { name: true, phone: true } },
         installments: {
           orderBy: [{ dueDate: "asc" }, { number: "asc" }],
@@ -52,8 +79,9 @@ export class ClientPortalService {
             amount: nextInstallment?.remainingAmount || credit.remainingAmount,
             dueDate: nextInstallment?.dueDate || credit.dueDate,
             canPayOnline:
+              isClientOnlinePaymentEnabled() &&
               (nextInstallment?.remainingAmount || credit.remainingAmount) >=
-              MIN_PAYTECH_AMOUNT,
+                MIN_PAYTECH_AMOUNT,
           }
         : null;
 
@@ -61,6 +89,14 @@ export class ClientPortalService {
       sellerName: credit.tenant.name,
       clientName: credit.client.name,
       clientPhone: credit.client.phone,
+      sellerPaymentAccounts: credit.tenant.payoutProfiles.map((profile) => ({
+        operator: profile.operator,
+        label: mobileMoneyLabel(profile.operator),
+        phone: profile.phone,
+        holderName: profile.holderName,
+        isDefault: profile.isDefault,
+      })),
+      paymentMode: isClientOnlinePaymentEnabled() ? "ONLINE" : "DIRECT",
       credit: {
         id: credit.id,
         amount: credit.amount,
@@ -92,6 +128,13 @@ export class ClientPortalService {
 
     if (!portal.nextPayment) {
       throw new AppError("Cette dette est déjà soldée", 400);
+    }
+
+    if (!isClientOnlinePaymentEnabled()) {
+      throw new AppError(
+        "Paiement en ligne désactivé. Payez directement le vendeur via Wave ou Orange Money.",
+        403,
+      );
     }
 
     if (!portal.nextPayment.canPayOnline) {

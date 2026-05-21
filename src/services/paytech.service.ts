@@ -39,6 +39,8 @@ type PaytechWebhookPayload = {
 const PAYTECH_BASE_URL = "https://paytech.sn/api";
 const MIN_PAYTECH_AMOUNT = 101;
 const SIMULATED_PAYMENT_METHOD = "Wave";
+const isClientPaymentEnabled = () =>
+  process.env.PAYTECH_CLIENT_PAYMENTS_ENABLED === "true";
 
 const getPublicUrl = () => (process.env.PUBLIC_API_URL || process.env.APP_URL || "").replace(/\/$/, "");
 
@@ -82,6 +84,13 @@ export class PaytechService {
   private payoutService = new PayoutService();
 
   async createPaymentRequest(input: PaytechRequestInput) {
+    if (!isClientPaymentEnabled()) {
+      throw new AppError(
+        "Paiement PayTech désactivé. Le client doit payer directement le vendeur.",
+        403,
+      );
+    }
+
     const credit = await prisma.credit.findFirst({
       where: {
         id: input.creditId,

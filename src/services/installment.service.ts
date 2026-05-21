@@ -1,4 +1,10 @@
-import { CreditStatus, InstallmentStatus, PaymentStatus, Prisma } from "@prisma/client";
+import {
+  CreditStatus,
+  InstallmentStatus,
+  PaymentMethod,
+  PaymentStatus,
+  Prisma,
+} from "@prisma/client";
 import { CreateInstallmentPlanInput } from "../schemas/installment.schema";
 import { AppError } from "../utils/AppError";
 import { prisma } from "../utils/prisma";
@@ -99,14 +105,22 @@ export class InstallmentService {
     return installment;
   }
 
-  async pay(tenantId: string, id: string, amount?: number) {
+  async pay(
+    tenantId: string,
+    id: string,
+    input: {
+      amount?: number;
+      method?: PaymentMethod;
+      reference?: string;
+    } = {}
+  ) {
     const installment = await this.getById(tenantId, id);
 
     if (installment.remainingAmount <= 0 || installment.status === InstallmentStatus.PAYEE) {
       throw new AppError("Installment is already paid", 400);
     }
 
-    const paidAmount = amount ?? installment.remainingAmount;
+    const paidAmount = input.amount ?? installment.remainingAmount;
 
     if (paidAmount > installment.remainingAmount) {
       throw new AppError("Payment amount exceeds installment balance", 400);
@@ -117,8 +131,9 @@ export class InstallmentService {
       creditId: installment.creditId,
       installmentId: installment.id,
       amount: paidAmount,
+      method: input.method,
       status: PaymentStatus.COMPLETED,
-      reference: `Tranche ${installment.number}`,
+      reference: input.reference || `Tranche ${installment.number}`,
     });
   }
 

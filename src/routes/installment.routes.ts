@@ -8,6 +8,7 @@ import {
 } from "../schemas/installment.schema";
 import { asyncHandler } from "../utils/asyncHandler";
 import { z } from "zod";
+import { PaymentMethod } from "@prisma/client";
 
 const router = Router();
 const controller = new InstallmentController();
@@ -16,6 +17,8 @@ const payInstallmentSchema = z.object({
   params: installmentIdSchema.shape.params,
   body: z.object({
     amount: z.number().int().positive().optional(),
+    method: z.nativeEnum(PaymentMethod).optional(),
+    reference: z.string().trim().optional(),
   }),
 });
 

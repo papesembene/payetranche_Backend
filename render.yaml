@@ -38,6 +38,8 @@ services:
         sync: false
       - key: PAYTECH_API_SECRET
         sync: false
+      - key: PAYTECH_CLIENT_PAYMENTS_ENABLED
+        value: "false"
       - key: PAYTECH_AUTO_PAYOUTS_ENABLED
         value: "false"
       - key: PAYTRANCHE_COMMISSION_RATE

@@ -28,7 +28,7 @@ export class InstallmentController {
     const payment = await installmentService.pay(
       req.tenantId!,
       req.params.id,
-      req.body?.amount
+      req.body
     );
     return res.status(201).json({ success: true, data: payment });
   };
