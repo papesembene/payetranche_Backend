@@ -209,6 +209,15 @@ export class CreditService {
 
   async update(tenantId: string, id: string, input: UpdateCreditInput) {
     const current = await this.getById(tenantId, id);
+    const hasActivity = await this.hasPaymentActivity(tenantId, id);
+
+    if (hasActivity) {
+      throw new AppError(
+        "Cette vente a déjà un paiement. Elle ne peut plus être modifiée.",
+        409
+      );
+    }
+
     const amount = input.amount ?? current.amount;
     const paidAmount = input.paidAmount ?? current.paidAmount;
 
@@ -246,6 +255,14 @@ export class CreditService {
 
   async delete(tenantId: string, id: string) {
     const credit = await this.getById(tenantId, id);
+    const hasActivity = await this.hasPaymentActivity(tenantId, id);
+
+    if (hasActivity) {
+      throw new AppError(
+        "Cette vente a déjà un paiement. Elle ne peut plus être supprimée.",
+        409
+      );
+    }
 
     await prisma.$transaction(async (tx) => {
       await tx.credit.delete({ where: { id } });
@@ -258,6 +275,35 @@ export class CreditService {
     });
 
     return { deleted: true };
+  }
+
+  private async hasPaymentActivity(tenantId: string, creditId: string) {
+    const [paymentsCount, paidInstallmentsCount, completedExternalPaymentsCount] =
+      await Promise.all([
+        prisma.payment.count({
+          where: { tenantId, creditId },
+        }),
+        prisma.installment.count({
+          where: {
+            tenantId,
+            creditId,
+            OR: [{ paidAmount: { gt: 0 } }, { remainingAmount: 0 }],
+          },
+        }),
+        prisma.externalPayment.count({
+          where: {
+            tenantId,
+            creditId,
+            status: "COMPLETED",
+          },
+        }),
+      ]);
+
+    return (
+      paymentsCount > 0 ||
+      paidInstallmentsCount > 0 ||
+      completedExternalPaymentsCount > 0
+    );
   }
 
   private resolveStatus(remainingAmount: number, dueDate?: Date | null) {
