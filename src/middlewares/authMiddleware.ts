@@ -61,7 +61,8 @@ export async function authMiddleware(
     if (!tenant?.isActive && !isPlatformAdminEmail(user.email)) {
       return res.status(403).json({
         success: false,
-        message: "This seller account is disabled",
+        code: "ACCOUNT_DISABLED",
+        message: "Votre compte est bloqué. Contactez PayTranche.",
       });
     }
 
