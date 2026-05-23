@@ -39,10 +39,7 @@ export class CreditService {
         include: { client: true },
       });
 
-      await tx.client.update({
-        where: { id: input.clientId },
-        data: { totalDebt: { increment: remainingAmount } },
-      });
+      await this.syncClientTotalDebt(tx, tenantId, input.clientId);
 
       return credit;
     });
@@ -240,12 +237,7 @@ export class CreditService {
         include: { client: true, payments: true },
       });
 
-      await tx.client.update({
-        where: { id: current.clientId },
-        data: {
-          totalDebt: { increment: remainingAmount - current.remainingAmount },
-        },
-      });
+      await this.syncClientTotalDebt(tx, tenantId, current.clientId);
 
       return updated;
     });
@@ -266,12 +258,7 @@ export class CreditService {
 
     await prisma.$transaction(async (tx) => {
       await tx.credit.delete({ where: { id } });
-      await tx.client.update({
-        where: { id: credit.clientId },
-        data: {
-          totalDebt: { decrement: credit.remainingAmount },
-        },
-      });
+      await this.syncClientTotalDebt(tx, tenantId, credit.clientId);
     });
 
     return { deleted: true };
@@ -304,6 +291,30 @@ export class CreditService {
       paidInstallmentsCount > 0 ||
       completedExternalPaymentsCount > 0
     );
+  }
+
+  private async syncClientTotalDebt(
+    tx: Prisma.TransactionClient,
+    tenantId: string,
+    clientId: string
+  ) {
+    const totals = await tx.credit.aggregate({
+      where: {
+        tenantId,
+        clientId,
+        status: { not: CreditStatus.ANNULE },
+      },
+      _sum: {
+        remainingAmount: true,
+      },
+    });
+
+    await tx.client.update({
+      where: { id: clientId },
+      data: {
+        totalDebt: totals._sum.remainingAmount ?? 0,
+      },
+    });
   }
 
   private resolveStatus(remainingAmount: number, dueDate?: Date | null) {
