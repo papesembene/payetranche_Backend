@@ -33,6 +33,15 @@ export class InstallmentController {
     return res.status(201).json({ success: true, data: payment });
   };
 
+  payMultiple = async (req: Request, res: Response) => {
+    const result = await installmentService.payMultiple(
+      req.tenantId!,
+      req.params.creditId,
+      req.body
+    );
+    return res.status(201).json({ success: true, data: result });
+  };
+
   scanOverdue = async (req: Request, res: Response) => {
     const installments = await installmentService.markOverdue(req.tenantId!);
     return res.json({ success: true, data: installments });

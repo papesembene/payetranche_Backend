@@ -137,6 +137,110 @@ export class InstallmentService {
     });
   }
 
+  async payMultiple(
+    tenantId: string,
+    creditId: string,
+    input: {
+      installmentIds: string[];
+      method?: PaymentMethod;
+      reference?: string;
+    }
+  ) {
+    const credit = await prisma.credit.findFirst({
+      where: { id: creditId, tenantId },
+      include: {
+        client: true,
+        installments: {
+          where: {
+            remainingAmount: { gt: 0 },
+            status: { not: InstallmentStatus.ANNULEE },
+          },
+          orderBy: [{ dueDate: "asc" }, { number: "asc" }],
+        },
+      },
+    });
+
+    if (!credit) {
+      throw new AppError("Credit not found", 404);
+    }
+
+    if (credit.installments.length === 0) {
+      throw new AppError("This credit has no unpaid installments", 400);
+    }
+
+    const selectedIds = new Set(input.installmentIds);
+    const selectedInstallments = credit.installments.filter((installment) =>
+      selectedIds.has(installment.id)
+    );
+
+    if (selectedInstallments.length !== selectedIds.size) {
+      throw new AppError("One or more selected installments are invalid", 400);
+    }
+
+    const totalAmount = selectedInstallments.reduce(
+      (total, installment) => total + installment.remainingAmount,
+      0
+    );
+
+    return prisma.$transaction(async (tx) => {
+      const payments = [];
+
+      for (const installment of selectedInstallments) {
+        const payment = await tx.payment.create({
+          data: {
+            tenantId,
+            clientId: credit.clientId,
+            creditId: credit.id,
+            installmentId: installment.id,
+            amount: installment.remainingAmount,
+            method: input.method ?? PaymentMethod.CASH,
+            status: PaymentStatus.COMPLETED,
+            reference: input.reference
+              ? `${input.reference} - Tranche ${installment.number}`
+              : `Paiement sélectionné - Tranche ${installment.number}`,
+          },
+        });
+
+        await tx.installment.update({
+          where: { id: installment.id },
+          data: {
+            paidAmount: installment.amount,
+            remainingAmount: 0,
+            status: InstallmentStatus.PAYEE,
+          },
+        });
+
+        payments.push(payment);
+      }
+
+      const creditRemainingAmount = Math.max(credit.remainingAmount - totalAmount, 0);
+      await tx.credit.update({
+        where: { id: credit.id },
+        data: {
+          paidAmount: credit.paidAmount + totalAmount,
+          remainingAmount: creditRemainingAmount,
+          status:
+            creditRemainingAmount <= 0
+              ? CreditStatus.PAYE
+              : CreditStatus.ACTIF,
+        },
+      });
+
+      await tx.client.update({
+        where: { id: credit.clientId },
+        data: {
+          totalDebt: Math.max(credit.client.totalDebt - totalAmount, 0),
+        },
+      });
+
+      return {
+        amount: totalAmount,
+        payments,
+        paidInstallmentsCount: selectedInstallments.length,
+      };
+    });
+  }
+
   async markOverdue(tenantId: string) {
     const now = new Date();
     await prisma.installment.updateMany({

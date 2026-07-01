@@ -6,12 +6,19 @@ import { errorHandler } from "./middlewares/errorHandler";
 
 const getCorsOptions = (): CorsOptions => {
   const rawOrigins = process.env.CORS_ORIGIN || process.env.FRONTEND_URL || "";
-  const allowedOrigins = rawOrigins
+  const configuredOrigins = rawOrigins
     .split(",")
     .map((origin) => origin.trim())
     .filter(Boolean);
+  const allowedOrigins = [
+    ...new Set([
+      ...configuredOrigins,
+      "https://localhost",
+      "capacitor://localhost",
+    ]),
+  ];
 
-  if (allowedOrigins.length === 0 || allowedOrigins.includes("*")) {
+  if (configuredOrigins.length === 0 || configuredOrigins.includes("*")) {
     return { origin: true };
   }
 
