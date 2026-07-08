@@ -112,18 +112,6 @@ enum SubscriptionPaymentStatus {
   FAILED
 }
 
-enum BusinessEntryType {
-  SALE
-  SUPPLIER_PURCHASE
-  EXPENSE
-}
-
-enum BusinessPaymentStatus {
-  PAID
-  PARTIAL
-  UNPAID
-}
-
 model Tenant {
   id                    String    @id @default(cuid())
   name                  String
@@ -145,8 +133,6 @@ model Tenant {
   walletTransactions WalletTransaction[]
   payouts SellerPayout[]
   subscriptionPayments SubscriptionPayment[]
-  suppliers Supplier[]
-  businessEntries BusinessEntry[]
 }
 
 model User {
@@ -281,47 +267,6 @@ model Payment {
   @@index([tenantId, clientId])
   @@index([tenantId, creditId])
   @@index([tenantId, installmentId])
-}
-
-model Supplier {
-  id        String   @id @default(cuid())
-  tenantId  String
-  name      String
-  phone     String?
-  notes     String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  entries BusinessEntry[]
-
-  @@index([tenantId])
-  @@index([tenantId, name])
-}
-
-model BusinessEntry {
-  id              String                @id @default(cuid())
-  tenantId        String
-  supplierId      String?
-  type            BusinessEntryType
-  title           String
-  amount          Int
-  paidAmount      Int                   @default(0)
-  remainingAmount Int                   @default(0)
-  paymentStatus   BusinessPaymentStatus @default(PAID)
-  note            String?
-  occurredAt      DateTime              @default(now())
-  createdAt       DateTime              @default(now())
-  updatedAt       DateTime              @updatedAt
-
-  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  supplier Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
-
-  @@index([tenantId])
-  @@index([tenantId, type])
-  @@index([tenantId, supplierId])
-  @@index([tenantId, occurredAt])
-  @@index([tenantId, paymentStatus])
 }
 
 model Installment {
