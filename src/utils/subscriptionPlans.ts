@@ -2,7 +2,7 @@ import { SubscriptionPlan } from "@prisma/client";
 
 export const PLAN_LIMITS = {
   [SubscriptionPlan.GRATUIT]: {
-    maxClients: 5,
+    maxClients: 10,
   },
   [SubscriptionPlan.PRO]: {
     maxClients: null,
